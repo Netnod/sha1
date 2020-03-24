@@ -64,8 +64,11 @@ module sha1_core(
   parameter SHA1_ROUNDS = 79;
 
   parameter CTRL_IDLE   = 0;
-  parameter CTRL_ROUNDS = 1;
-  parameter CTRL_DONE   = 2;
+  parameter CTRL_PIPE0  = 1;
+  parameter CTRL_PIPE1  = 2;
+  parameter CTRL_PIPE2  = 3;
+  parameter CTRL_ROUNDS = 4;
+  parameter CTRL_DONE   = 5;
 
 
   //----------------------------------------------------------------
@@ -95,6 +98,18 @@ module sha1_core(
   reg [31 : 0] H4_new;
   reg          H_we;
 
+  reg [31 : 0] f_reg;
+  reg [31 : 0] f_new;
+  reg [31 : 0] k_reg;
+  reg [31 : 0] k_new;
+  reg [31 : 0] t_reg;
+  reg [31 : 0] t_new;
+
+  reg [31 : 0] sum0_reg;
+  reg [31 : 0] sum0_new;
+  reg [31 : 0] sum1_reg;
+  reg [31 : 0] sum1_new;
+
   reg [6 : 0] round_ctr_reg;
   reg [6 : 0] round_ctr_new;
   reg         round_ctr_we;
@@ -105,8 +120,8 @@ module sha1_core(
   reg digest_valid_new;
   reg digest_valid_we;
 
-  reg [1 : 0] sha1_ctrl_reg;
-  reg [1 : 0] sha1_ctrl_new;
+  reg [2 : 0] sha1_ctrl_reg;
+  reg [2 : 0] sha1_ctrl_new;
   reg         sha1_ctrl_we;
 
 
@@ -163,6 +178,11 @@ module sha1_core(
           c_reg            <= 32'h0;
           d_reg            <= 32'h0;
           e_reg            <= 32'h0;
+          f_reg            <= 32'h0;
+          k_reg            <= 32'h0;
+          t_reg            <= 32'h0;
+          sum0_reg         <= 32'h0;
+          sum1_reg         <= 32'h0;
           H0_reg           <= 32'h0;
           H1_reg           <= 32'h0;
           H2_reg           <= 32'h0;
@@ -174,6 +194,13 @@ module sha1_core(
         end
       else
         begin
+          f_reg <= f_new;
+          k_reg <= k_new;
+          t_reg <= t_new;
+
+          sum0_reg <= sum0_new;
+          sum1_reg <= sum1_new;
+
           if (a_e_we)
             begin
               a_reg <= a_new;
@@ -205,12 +232,18 @@ module sha1_core(
 
 
   //----------------------------------------------------------------
-  // digest_logic
+  // sha1_dp
   //
-  // The logic needed to init as well as update the digest.
+  // The logic needed to init as well as update the state during
+  // round processing as well as the digest.
   //----------------------------------------------------------------
   always @*
-    begin : digest_logic
+    begin : sha1_dp
+      reg [31 : 0] rot_a;
+      reg [31 : 0] f;
+      reg [31 : 0] k;
+      reg [31 : 0] t;
+
       H0_new = 32'h0;
       H1_new = 32'h0;
       H2_new = 32'h0;
@@ -218,51 +251,46 @@ module sha1_core(
       H4_new = 32'h0;
       H_we = 0;
 
-      if (digest_init)
-        begin
-          H0_new = H0_0;
-          H1_new = H0_1;
-          H2_new = H0_2;
-          H3_new = H0_3;
-          H4_new = H0_4;
-          H_we = 1;
-        end
-
-      if (digest_update)
-        begin
-          H0_new = H0_reg + a_reg;
-          H1_new = H1_reg + b_reg;
-          H2_new = H2_reg + c_reg;
-          H3_new = H3_reg + d_reg;
-          H4_new = H4_reg + e_reg;
-          H_we = 1;
-        end
-    end // digest_logic
-
-
-  //----------------------------------------------------------------
-  // state_logic
-  //
-  // The logic needed to init as well as update the state during
-  // round processing.
-  //----------------------------------------------------------------
-  always @*
-    begin : state_logic
-      reg [31 : 0] a5;
-      reg [31 : 0] f;
-      reg [31 : 0] k;
-      reg [31 : 0] t;
-
-      a5     = 32'h0;
-      f      = 32'h0;
-      k      = 32'h0;
-      t      = 32'h0;
       a_new  = 32'h0;
       b_new  = 32'h0;
       c_new  = 32'h0;
       d_new  = 32'h0;
       e_new  = 32'h0;
       a_e_we = 0;
+
+      if (round_ctr_reg <= 19)
+        begin
+          k = 32'h5a827999;
+          f =  ((b_reg & c_reg) ^ (~b_reg & d_reg));
+        end
+      else if ((round_ctr_reg >= 20) && (round_ctr_reg <= 39))
+        begin
+          k = 32'h6ed9eba1;
+          f = b_reg ^ c_reg ^ d_reg;
+        end
+      else if ((round_ctr_reg >= 40) && (round_ctr_reg <= 59))
+        begin
+          k = 32'h8f1bbcdc;
+          f = ((b_reg | c_reg) ^ (b_reg | d_reg) ^ (c_reg | d_reg));
+        end
+      else if (round_ctr_reg >= 60)
+        begin
+          k = 32'hca62c1d6;
+          f = b_reg ^ c_reg ^ d_reg;
+        end
+      else
+        begin
+          k = 32'h0;
+          f = 32'h0;
+        end
+
+      f_new    = f;
+      k_new    = k;
+      rot_a    = {a_reg[26 : 0], a_reg[31 : 27]};
+      sum0_new = rot_a + e_reg;
+      sum1_new = f_reg + k_reg;
+      t        = sum0_reg + sum1_reg + w;
+      t_new    = t;
 
       if (state_init)
         begin
@@ -288,38 +316,34 @@ module sha1_core(
 
       if (state_update)
         begin
-          if (round_ctr_reg <= 19)
-            begin
-              k = 32'h5a827999;
-              f =  ((b_reg & c_reg) ^ (~b_reg & d_reg));
-            end
-          else if ((round_ctr_reg >= 20) && (round_ctr_reg <= 39))
-            begin
-              k = 32'h6ed9eba1;
-              f = b_reg ^ c_reg ^ d_reg;
-            end
-          else if ((round_ctr_reg >= 40) && (round_ctr_reg <= 59))
-            begin
-              k = 32'h8f1bbcdc;
-              f = ((b_reg | c_reg) ^ (b_reg | d_reg) ^ (c_reg | d_reg));
-            end
-          else if (round_ctr_reg >= 60)
-            begin
-              k = 32'hca62c1d6;
-              f = b_reg ^ c_reg ^ d_reg;
-            end
-
-          a5 = {a_reg[26 : 0], a_reg[31 : 27]};
-          t = a5 + e_reg + f + k + w;
-
-          a_new  = t;
+          a_new  = t_reg;
           b_new  = a_reg;
           c_new  = {b_reg[1 : 0], b_reg[31 : 2]};
           d_new  = c_reg;
           e_new  = d_reg;
           a_e_we = 1;
         end
-    end // state_logic
+
+      if (digest_init)
+        begin
+          H0_new = H0_0;
+          H1_new = H0_1;
+          H2_new = H0_2;
+          H3_new = H0_3;
+          H4_new = H0_4;
+          H_we = 1;
+        end
+
+      if (digest_update)
+        begin
+          H0_new = H0_reg + a_reg;
+          H1_new = H1_reg + b_reg;
+          H2_new = H2_reg + c_reg;
+          H3_new = H3_reg + d_reg;
+          H4_new = H4_reg + e_reg;
+          H_we = 1;
+        end
+    end // sha1_dp
 
 
   //----------------------------------------------------------------
@@ -382,7 +406,7 @@ module sha1_core(
                 round_ctr_rst    = 1;
                 digest_valid_new = 0;
                 digest_valid_we  = 1;
-                sha1_ctrl_new    = CTRL_ROUNDS;
+                sha1_ctrl_new    = CTRL_PIPE0;
                 sha1_ctrl_we     = 1;
               end
 
@@ -393,9 +417,30 @@ module sha1_core(
                 round_ctr_rst    = 1;
                 digest_valid_new = 0;
                 digest_valid_we  = 1;
-                sha1_ctrl_new    = CTRL_ROUNDS;
+                sha1_ctrl_new    = CTRL_PIPE0;
                 sha1_ctrl_we     = 1;
               end
+          end
+
+
+        CTRL_PIPE0:
+          begin
+            sha1_ctrl_new = CTRL_PIPE1;
+            sha1_ctrl_we  = 1'h1;
+          end
+
+
+        CTRL_PIPE1:
+          begin
+            sha1_ctrl_new = CTRL_PIPE2;
+            sha1_ctrl_we  = 1'h1;
+          end
+
+
+        CTRL_PIPE2:
+          begin
+            sha1_ctrl_new = CTRL_ROUNDS;
+            sha1_ctrl_we  = 1'h1;
           end
 
 
@@ -408,6 +453,11 @@ module sha1_core(
             if (round_ctr_reg == SHA1_ROUNDS)
               begin
                 sha1_ctrl_new = CTRL_DONE;
+                sha1_ctrl_we  = 1;
+              end
+            else
+              begin
+                sha1_ctrl_new = CTRL_PIPE0;
                 sha1_ctrl_we  = 1;
               end
           end

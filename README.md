@@ -52,36 +52,17 @@ registers. This allows you to load a new block while the core is
 processing the previous block.
 
 
+The implementation implements three pipeline cycles to reach
+200+ MHz clock frequency.
+
+
 ## FPGA-results ##
 
-### Altera Cyclone FPGAs ###
-Implementation results using Altera Quartus-II 13.1.
-
-**Altera Cyclone IV E**
-- EP4CE6F17C6
-- 2913 LEs
-- 1527 regs
-- 107 MHz
-
-**Altera Cyclone IV GX**
-- EP4CGX22CF19C6
-- 2814 LEs
-- 1527 regs
-- 105 MHz
-
-**Altera Cyclone V**
-- 5CGXFC7C7F23C8
-- 1124 ALMs
-- 1527 regs
-- 104 MHz
-
-
 ### Xilinx FPGAs ###
-Implementation results using ISE 14.7.
+Implementation results using Vivado 19.2
 
-**Xilinx Spartan-6**
-- xc6slx45-3csg324
-- 1589 LUTs
-- 564 Slices
-- 1592 regs
-- 100 MHz
+**Xilinx Artix-7**
+- Device: xc7a200tsbg484-2
+- 1494 LUTs
+- 1709 regs
+- 204 MHz

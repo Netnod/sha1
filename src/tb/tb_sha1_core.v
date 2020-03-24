@@ -53,6 +53,7 @@ module tb_sha1_core();
   reg [31 : 0] error_ctr;
   reg [31 : 0] tc_ctr;
 
+  reg            tb_debug;
   reg            tb_clk;
   reg            tb_reset_n;
   reg            tb_init;
@@ -63,24 +64,23 @@ module tb_sha1_core();
   wire           tb_digest_valid;
 
 
-
   //----------------------------------------------------------------
   // Device Under Test.
   //----------------------------------------------------------------
   sha1_core dut(
-                   .clk(tb_clk),
-                   .reset_n(tb_reset_n),
+                .clk(tb_clk),
+                .reset_n(tb_reset_n),
 
-                   .init(tb_init),
-                   .next(tb_next),
+                .init(tb_init),
+                .next(tb_next),
 
-                   .block(tb_block),
+                .block(tb_block),
 
-                   .ready(tb_ready),
+                .ready(tb_ready),
 
-                   .digest(tb_digest),
-                   .digest_valid(tb_digest_valid)
-                 );
+                .digest(tb_digest),
+                .digest_valid(tb_digest_valid)
+               );
 
 
   //----------------------------------------------------------------
@@ -99,8 +99,9 @@ module tb_sha1_core();
   //----------------------------------------------------------------
   always
     begin : sys_monitor
+      cycle_ctr = cycle_ctr + 1;
       #(CLK_PERIOD);
-      if (DEBUG)
+      if (tb_debug)
         begin
           dump_dut_state();
         end
@@ -115,7 +116,9 @@ module tb_sha1_core();
   task dump_dut_state;
     begin
       $display("State of DUT");
-      $display("------------");
+      $display("============");
+      $display("Cycle: %08d", cycle_ctr);
+      $display("");
       $display("Inputs and outputs:");
       $display("init   = 0x%01x, next  = 0x%01x",
                dut.init, dut.next);
@@ -148,9 +151,11 @@ module tb_sha1_core();
       $display("");
 
       $display("State update values:");
-      $display("f = 0x%08x, k = 0x%08x, t = 0x%08x, w = 0x%08x,",
-               dut.state_logic.f, dut.state_logic.k, dut.state_logic.t, dut.w);
-      $display("");
+      $display("f:     0x%08x, k:     0x%08x, t:     0x%08x, w: 0x%08x, rot_a: 0x%08x",
+               dut.sha1_dp.f, dut.sha1_dp.k, dut.sha1_dp.t, dut.w, dut.sha1_dp.rot_a);
+      $display("f_reg: 0x%08x, k_reg: 0x%08x, t_reg: 0x%08x",
+               dut.f_reg, dut.k_reg, dut.t_reg);
+      $display("\n");
     end
   endtask // dump_dut_state
 
@@ -160,7 +165,7 @@ module tb_sha1_core();
   //----------------------------------------------------------------
   task reset_dut;
     begin
-      $display("*** Toggle reset.");
+      $display("-- Toggling reset.");
       tb_reset_n = 0;
       #(4 * CLK_HALF_PERIOD);
       tb_reset_n = 1;
@@ -176,15 +181,17 @@ module tb_sha1_core();
   //----------------------------------------------------------------
   task init_sim;
     begin
+      cycle_ctr = 0;
       error_ctr = 0;
       tc_ctr = 0;
 
-      tb_clk = 0;
+      tb_debug   = 0;
+      tb_clk     = 0;
       tb_reset_n = 1;
 
       tb_init = 0;
       tb_next = 0;
-      tb_block = 512'h00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;
+      tb_block = 512'h0;
     end
   endtask // init_dut
 
@@ -198,11 +205,11 @@ module tb_sha1_core();
     begin
       if (error_ctr == 0)
         begin
-          $display("*** All %02d test cases completed successfully", tc_ctr);
+          $display("-- All %02d test cases completed successfully", tc_ctr);
         end
       else
         begin
-          $display("*** %02d test cases did not complete successfully.", error_ctr);
+          $display("-- %02d test cases did not complete successfully.", error_ctr);
         end
     end
   endtask // display_test_result
@@ -237,8 +244,10 @@ module tb_sha1_core();
                          input [511 : 0] block,
                          input [159 : 0] expected);
    begin
-     $display("*** TC %0d single block test case started.", tc_number);
+     $display("-- TC %0d single block test case started.", tc_number);
      tc_ctr = tc_ctr + 1;
+
+     tb_debug = 1;
 
      tb_block = block;
      tb_init = 1;
@@ -249,18 +258,20 @@ module tb_sha1_core();
 
      if (tb_digest == expected)
        begin
-         $display("*** TC %0d successful.", tc_number);
+         $display("-- TC %0d successful.", tc_number);
          $display("");
        end
      else
        begin
-         $display("*** ERROR: TC %0d NOT successful.", tc_number);
+         $display("-- ERROR: TC %0d NOT successful.", tc_number);
          $display("Expected: 0x%040x", expected);
          $display("Got:      0x%040x", tb_digest);
          $display("");
 
          error_ctr = error_ctr + 1;
        end
+
+     tb_debug = 0;
    end
   endtask // single_block_test
 
@@ -279,35 +290,36 @@ module tb_sha1_core();
      reg [159 : 0] db_digest1;
      reg           db_error;
    begin
-     $display("*** TC %0d double block test case started.", tc_number);
+     tb_debug = 1;
+     $display("-- TC %0d double block test case started.", tc_number);
      db_error = 0;
      tc_ctr = tc_ctr + 1;
 
-     $display("*** TC %0d first block started.", tc_number);
+     $display("-- TC %0d first block started.", tc_number);
      tb_block = block1;
      tb_init = 1;
      #(CLK_PERIOD);
      tb_init = 0;
      wait_ready();
      db_digest1 = tb_digest;
-     $display("*** TC %0d first block done.", tc_number);
+     $display("-- TC %0d first block done.", tc_number);
 
-     $display("*** TC %0d second block started.", tc_number);
+     $display("-- TC %0d second block started.", tc_number);
      tb_block = block2;
      tb_next = 1;
      #(CLK_PERIOD);
      tb_next = 0;
      wait_ready();
-     $display("*** TC %0d second block done.", tc_number);
+     $display("-- TC %0d second block done.", tc_number);
 
      if (db_digest1 == expected1)
        begin
-         $display("*** TC %0d first block successful", tc_number);
+         $display("-- TC %0d first block successful", tc_number);
          $display("");
        end
      else
        begin
-         $display("*** ERROR: TC %0d first block NOT successful", tc_number);
+         $display("-- ERROR: TC %0d first block NOT successful", tc_number);
          $display("Expected: 0x%040x", expected1);
          $display("Got:      0x%040x", db_digest1);
          $display("");
@@ -316,12 +328,12 @@ module tb_sha1_core();
 
      if (db_digest1 == expected1)
        begin
-         $display("*** TC %0d second block successful", tc_number);
+         $display("-- TC %0d second block successful", tc_number);
          $display("");
        end
      else
        begin
-         $display("*** ERROR: TC %0d second block NOT successful", tc_number);
+         $display("-- ERROR: TC %0d second block NOT successful", tc_number);
          $display("Expected: 0x%040x", expected2);
          $display("Got:      0x%040x", tb_digest);
          $display("");
@@ -332,6 +344,7 @@ module tb_sha1_core();
        begin
          error_ctr = error_ctr + 1;
        end
+     tb_debug = 0;
    end
   endtask // double_block_test
 
@@ -353,7 +366,8 @@ module tb_sha1_core();
       reg [511 : 0] tc2_2;
       reg [159 : 0] res2_2;
 
-      $display("   -- Testbench for sha1 core started --");
+      $display("-- Simulation of sha1_core started --");
+      $display("-------------------------------------");
 
       init_sim();
       dump_dut_state();
@@ -375,7 +389,8 @@ module tb_sha1_core();
       double_block_test(2, tc2_1, res2_1, tc2_2, res2_2);
 
       display_test_result();
-      $display("*** Simulation done.");
+      $display("-- Simulation of sha1_core completed --");
+      $display("---------------------------------------");
       $finish;
     end // sha1_core_test
 endmodule // tb_sha1_core

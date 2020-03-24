@@ -85,11 +85,13 @@ module sha1_w_mem(
   reg         w_ctr_we;
 
 
+  reg [31 : 0] w_reg;
+  reg [31 : 0] w_new;
+
   //----------------------------------------------------------------
   // Wires.
   //----------------------------------------------------------------
   reg [31 : 0] w_tmp;
-  reg [31 : 0] w_new;
 
 
   //----------------------------------------------------------------
@@ -115,9 +117,12 @@ module sha1_w_mem(
             w_mem[i] <= 32'h0;
 
           w_ctr_reg <= 7'h0;
+          w_reg     <= 32'h0;
         end
       else
         begin
+          w_reg <= w_new;
+
           if (w_mem_we)
             begin
               w_mem[00] <= w_mem00_new;
@@ -155,7 +160,7 @@ module sha1_w_mem(
       if (w_ctr_reg < 16)
         w_tmp = w_mem[w_ctr_reg[3 : 0]];
       else
-        w_tmp = w_new;
+        w_tmp = w_reg;
     end // select_w
 
 

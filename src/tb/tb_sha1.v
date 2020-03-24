@@ -231,7 +231,7 @@ module tb_sha1();
 
       $display("State update values:");
       $display("f = 0x%08x, k = 0x%08x, t = 0x%08x, w = 0x%08x,",
-               dut.core.state_logic.f, dut.core.state_logic.k, dut.core.state_logic.t, dut.core.w);
+               dut.core.sha1_dp.f, dut.core.sha1_dp.k, dut.core.sha1_dp.t, dut.core.w);
       $display("");
     end
   endtask // dump_core_state
