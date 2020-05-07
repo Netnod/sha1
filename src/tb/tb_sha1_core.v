@@ -366,6 +366,11 @@ module tb_sha1_core();
       reg [511 : 0] tc2_2;
       reg [159 : 0] res2_2;
 
+      reg [511 : 0] tc3_1;
+      reg [159 : 0] res3_1;
+      reg [511 : 0] tc3_2;
+      reg [159 : 0] res3_2;
+
       $display("-- Simulation of sha1_core started --");
       $display("-------------------------------------");
 
@@ -387,6 +392,13 @@ module tb_sha1_core();
       tc2_2 = 512'h000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001C0;
       res2_2 = 160'h84983e441c3bd26ebaae4aa1f95129e5e54670f1;
       double_block_test(2, tc2_1, res2_1, tc2_2, res2_2);
+
+      //Testcase from a SHA1 NTP AUTH operation
+      tc3_1 = 512'h6dea311109529e436c2b4fccae9bc753c16d1b48e30003fa000100000001000000000000000000000000000000000000000000000000000000000000d9c1249c;
+      res3_1 = 160'h63c598beb5eb6518c1934f13d1a9d3dc4b73d588;
+      tc3_2 = 512'h4981792f800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000220;
+      res3_2 = 160'h6b944dce3f05510d206f615f36e900fa532594c8;
+      double_block_test(3, tc3_1, res3_1, tc3_2, res3_2);
 
       display_test_result();
       $display("-- Simulation of sha1_core completed --");
